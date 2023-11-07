@@ -3,8 +3,7 @@ from HAL import HAL
 
 import cv2
 
-# Define the target X position for line following
-target_x = 320  # Adjust this value according to your setup
+target_x = 320  
 
 while True:
     img = HAL.getImage()
@@ -26,7 +25,7 @@ while True:
         
         err = target_x - cX
         HAL.setV(1)
-        Kp = 0.01  # Adjust this value to control the speed of response
+        Kp = 0.01  
         HAL.setW(Kp * err)
     else:
         # If no red line is detected, stop
