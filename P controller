@@ -1,36 +1,47 @@
 from GUI import GUI
 from HAL import HAL
-
 import cv2
 
-target_x = 320  
+# Define your set point (where the car should be heading)
+set_point = 320  # Adjust this value as needed
 
+# Proportional control constant (adjust as needed)
+Kp = 0.01  # Adjust this value for the desired response
+
+i = 0
 while True:
     img = HAL.getImage()
-    
+
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     RED_MASK = cv2.inRange(hsv, (0, 125, 125), (30, 255, 255))
-    
+
     contours, hierachy = cv2.findContours(RED_MASK, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    
-    if len(contours) > 0:
+
+    if contours:
+        # Find the largest contour (you may want to add more logic if there are multiple contours)
         largest_contour = max(contours, key=cv2.contourArea)
         M = cv2.moments(largest_contour)
-        
+
         if M["m00"] != 0:
             cX = int(M["m10"] / M["m00"])
             cY = int(M["m01"] / M["m00"])
         else:
             cX, cY = 0, 0
-        
-        err = target_x - cX
-        HAL.setV(1)
-        Kp = 0.01  
-        HAL.setW(Kp * err)
+
+        # Calculate the error (the difference between set_point and cX)
+        err = set_point - cX
+
+        # Adjust the steering based on the error using a proportional controller
+        steer_angle = Kp * err
+
+        HAL.setV(1)  # Set the forward velocity
+        HAL.setW(steer_angle)  # Set the steering angle
+
     else:
-        # If no red line is detected, stop
+        # If no contours are found, stop the car
         HAL.setV(0)
         HAL.setW(0)
-    
+
     GUI.showImage(RED_MASK)
-    print('cX: %.2f cY: %.2f' % (cX, cY))
+    print('%d cX: %.2f cy: %.2f err: %.2f' % (i, cX, cY, err))
+    i += 1
