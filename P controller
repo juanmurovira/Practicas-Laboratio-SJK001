@@ -6,7 +6,7 @@ import cv2
 set_point = 320  # Adjust this value as needed
 
 # Proportional control constant (adjust as needed)
-Kp = 0.01  # Adjust this value for the desired response
+Kp = 0.002 # Adjust this value for the desired response
 
 i = 0
 while True:
@@ -34,7 +34,7 @@ while True:
         # Adjust the steering based on the error using a proportional controller
         steer_angle = Kp * err
 
-        HAL.setV(1)  # Set the forward velocity
+        HAL.setV(2.4)  # Set the forward velocity
         HAL.setW(steer_angle)  # Set the steering angle
 
     else:
