@@ -6,7 +6,16 @@ import cv2
 set_point = 320  # Adjust this value as needed
 
 # Proportional control constant (adjust as needed)
-Kp = 0.002 # Adjust this value for the desired response
+Kp = 0.005  # Increase this value for a faster response
+
+# Forward velocity (adjust as needed)
+forward_velocity = 3.0  # Increase this value for faster forward motion
+
+# Threshold for considering a lap finished (adjust as needed)
+lap_finish_threshold = 50  # Adjust this value based on your track characteristics
+
+# Initialize lap counter
+lap_count = 0
 
 i = 0
 while True:
@@ -34,8 +43,13 @@ while True:
         # Adjust the steering based on the error using a proportional controller
         steer_angle = Kp * err
 
-        HAL.setV(2.4)  # Set the forward velocity
+        HAL.setV(forward_velocity)  # Set the forward velocity
         HAL.setW(steer_angle)  # Set the steering angle
+
+        # Check if a lap is finished based on the position or angle criteria
+        if abs(err) < lap_finish_threshold:
+            lap_count += 1
+            print(f"Lap {lap_count} finished!")
 
     else:
         # If no contours are found, stop the car
