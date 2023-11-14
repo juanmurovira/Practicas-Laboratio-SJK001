@@ -8,7 +8,7 @@ set_point = 320  # Adjust this value as needed
 # Initial PID control constants
 Kp = 0.002
 Ki = 0.00
-Kd = 0.04
+Kd = 0.03
 
 # Variables for PID control
 prev_err = 0
