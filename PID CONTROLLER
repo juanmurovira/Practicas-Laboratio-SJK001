@@ -1,0 +1,63 @@
+from GUI import GUI
+from HAL import HAL
+import cv2
+
+# Define your set point (where the car should be heading)
+set_point = 320  # Adjust this value as needed
+
+# PID control constants (adjust as needed)
+Kp = 0.002  # Adjust this value for proportional control
+Ki = 0.0001  # Adjust this value for integral control
+Kd = 0.001   # Adjust this value for derivative control
+
+# Initialize PID variables
+prev_err = 0
+integral = 0
+
+i = 0
+while True:
+    img = HAL.getImage()
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    RED_MASK = cv2.inRange(hsv, (0, 125, 125), (30, 255, 255))
+
+    contours, hierachy = cv2.findContours(RED_MASK, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    if contours:
+        # Find the largest contour (you may want to add more logic if there are multiple contours)
+        largest_contour = max(contours, key=cv2.contourArea)
+        M = cv2.moments(largest_contour)
+
+        if M["m00"] != 0:
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+        else:
+            cX, cY = 0, 0
+
+        # Calculate the error (the difference between set_point and cX)
+        err = set_point - cX
+
+        # Update integral and derivative terms
+        integral += err
+        derivative = err - prev_err
+
+        # Calculate the control signal using PID formula
+        control_signal = Kp * err + Ki * integral + Kd * derivative
+
+        # Adjust the steering based on the control signal
+        steer_angle = control_signal
+
+        HAL.setV(2.4)  # Set the forward velocity
+        HAL.setW(steer_angle)  # Set the steering angle
+
+        # Update previous error for the next iteration
+        prev_err = err
+
+    else:
+        # If no contours are found, stop the car
+        HAL.setV(0)
+        HAL.setW(0)
+
+    GUI.showImage(RED_MASK)
+    print('%d cX: %.2f cy: %.2f err: %.2f' % (i, cX, cY, err))
+    i += 1
