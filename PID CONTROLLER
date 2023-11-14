@@ -2,17 +2,23 @@ from GUI import GUI
 from HAL import HAL
 import cv2
 
-# Define your set point (where the car should be heading)
+# Initialize set point (where the line should be centered)
 set_point = 320  # Adjust this value as needed
 
-# PID control constants (adjust as needed)
-Kp = 0.002  # Adjust this value for proportional control
-Ki = 0.0001  # Adjust this value for integral control
-Kd = 0.001   # Adjust this value for derivative control
+# Initial PID control constants
+Kp = 0.002
+Ki = 0.00
+Kd = 0.04
 
-# Initialize PID variables
+# Variables for PID control
 prev_err = 0
 integral = 0
+
+# Variables for adaptive control
+adaptive_factor = 1.0  # Initial adaptive factor
+min_speed = 2       # Minimum forward velocity
+max_speed = 4       # Maximum forward velocity
+max_curve_err = 50    # Maximum error allowed for full speed
 
 i = 0
 while True:
@@ -21,10 +27,9 @@ while True:
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     RED_MASK = cv2.inRange(hsv, (0, 125, 125), (30, 255, 255))
 
-    contours, hierachy = cv2.findContours(RED_MASK, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv2.findContours(RED_MASK, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     if contours:
-        # Find the largest contour (you may want to add more logic if there are multiple contours)
         largest_contour = max(contours, key=cv2.contourArea)
         M = cv2.moments(largest_contour)
 
@@ -34,20 +39,26 @@ while True:
         else:
             cX, cY = 0, 0
 
-        # Calculate the error (the difference between set_point and cX)
         err = set_point - cX
 
-        # Update integral and derivative terms
-        integral += err
+        # Adaptive control: Adjust PID gains based on curvature or other factors
+        adaptive_factor = 1.0  # You need to implement logic to adjust this factor based on curvature or other criteria
+        Kp_adaptive = Kp * adaptive_factor
+        Ki_adaptive = Ki * adaptive_factor
+        Kd_adaptive = Kd * adaptive_factor
+
+        # PID control calculations
+        integral = integral + err
         derivative = err - prev_err
 
-        # Calculate the control signal using PID formula
-        control_signal = Kp * err + Ki * integral + Kd * derivative
+        # Calculate the steering angle using PID
+        steer_angle = Kp_adaptive * err + Ki_adaptive * integral + Kd_adaptive * derivative
 
-        # Adjust the steering based on the control signal
-        steer_angle = control_signal
+        # Adjust the forward velocity based on adaptive factor and curvature error
+        curve_err = abs(err)
+        speed = max(min_speed, min(max_speed, max_speed - 0.02 * curve_err))
+        HAL.setV(speed)
 
-        HAL.setV(2.4)  # Set the forward velocity
         HAL.setW(steer_angle)  # Set the steering angle
 
         # Update previous error for the next iteration
@@ -59,5 +70,6 @@ while True:
         HAL.setW(0)
 
     GUI.showImage(RED_MASK)
-    print('%d cX: %.2f cy: %.2f err: %.2f' % (i, cX, cY, err))
+    print('%d cX: %.2f cy: %.2f err: %.2f speed: %.2f' % (i, cX, cY, err, speed))
     i += 1
+
