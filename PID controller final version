@@ -16,46 +16,8 @@ integral = 0
 
 # Variables for adaptive control
 adaptive_factor = 1.0  # Initial adaptive factor
-min_speed = 2.5      # Minimum forward velocity
-max_speed = 3.5    # Maximum forward velocity
-max_curve_err = 50    # Maximum error allowed for full speed
-
-i = 0
-while True:
-    img = HAL.getImage()
-
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    RED_MASK = cv2.inRange(hsv, (0, 125, 125), (30, 255, 255))
-
-    contours, hierarchy = cv2.findContours(RED_MASK, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-    if contours:
-        largest_contour = max(contours, key=cv2.contourArea)
-        M = cv2.moments(largest_contour)
-
-        if M["m00"] != 0:
-            cX = int(M["m10"] / M["m00"])
-            cY = int(M["m01"] / M["m00"])
-from GUI import GUI
-from HAL import HAL
-import cv2
-
-# Initialize set point (where the line should be centered)
-set_point = 320  # Adjust this value as needed
-
-# Initial PID control constants
-Kp = 0.002
-Ki = 0.00
-Kd = 0.03
-
-# Variables for PID control
-prev_err = 0
-integral = 0
-
-# Variables for adaptive control
-adaptive_factor = 1.0  # Initial adaptive factor
-min_speed = 2       # Minimum forward velocity
-max_speed = 4       # Maximum forward velocity
+min_speed = 3       # Minimum forward velocity
+max_speed = 3.5      # Maximum forward velocity
 max_curve_err = 50    # Maximum error allowed for full speed
 
 i = 0
