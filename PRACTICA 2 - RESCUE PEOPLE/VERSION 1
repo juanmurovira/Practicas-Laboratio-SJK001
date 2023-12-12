@@ -1,0 +1,59 @@
+from GUI import GUI
+from HAL import HAL
+import cv2
+import math
+
+# Constants
+VICTIMS_X = 30
+VICTIMS_Y = -40
+BOAT_X = 0
+BOAT_Y = 0
+
+# Variables
+x_vel = 0.25
+angle = 0.6
+iterations = 0
+spiral_iterations = 300
+landing_margin = 0.07
+
+# Start
+x_pos, y_pos = HAL.get_position()[:2]
+
+# Takeoff
+HAL.takeoff(3)
+
+# Face Cascade Classifier
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+# Main loop
+while not((VICTIMS_X - 1 <= x_pos <= VICTIMS_X + 1) and
+          (VICTIMS_Y - 1 <= y_pos <= VICTIMS_Y + 1)):
+
+    # Display images
+    frontal_image = HAL.get_frontal_image()
+    ventral_image = HAL.get_ventral_image()
+    GUI.showImage(frontal_image)
+    GUI.showLeftImage(ventral_image)
+
+    # Update drone position
+    x_pos, y_pos = HAL.get_position()[:2]
+
+    # Set command position
+    HAL.set_cmd_pos(VICTIMS_X, VICTIMS_Y, 3, angle)
+
+    # Face detection in the frontal image
+    faces = face_cascade.detectMultiScale(cv2.cvtColor(frontal_image, cv2.COLOR_BGR2GRAY), scaleFactor=1.3, minNeighbors=5)
+
+    # Process detected faces
+    for (fx, fy, fw, fh) in faces:
+        # Your logic for drone control based on detected faces goes here
+        # For example, you can calculate the distance and angle from the drone to the detected face
+        # Adjust the drone's position or velocity accordingly
+        pass  # Placeholder to ensure the loop is not empty
+
+# Additional code for continuous image display
+while True:
+    frontal_image = HAL.get_frontal_image()
+    ventral_image = HAL.get_ventral_image()
+    GUI.showImage(frontal_image)
+    GUI.showLeftImage(ventral_image)
