@@ -1,63 +1,36 @@
-from HAL import HAL
 from GUI import GUI
+from HAL import HAL
 import cv2
 import math
-import rospy
 
 # Constants
 VICTIMS_X = 30
 VICTIMS_Y = -40
 BOAT_X = 0
 BOAT_Y = 0
-X_VELOCITY = 0.25
-ANGLE = 0.6
-SPIRAL_ITERATIONS = 300
-LANDING_MARGIN = 0.07
-FACES_TO_DETECT = 6  # Add this line
 
 # Variables
-x_pos = 0
-y_pos = 0
-detected_faces = []
-it = 0
+x_vel = 0.25
+angle = 0.6
+iterations = 0
+spiral_iterations = 300
+landing_margin = 0.07
 
-# Create a cascade classifier for face detection
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# Start
+x_pos, y_pos = HAL.get_position()[:2]
 
-
-# Function to detect faces
-def detect_faces():
-    global detected_faces
-    frontal_image = HAL.get_frontal_image()
-    gray_image = cv2.cvtColor(frontal_image, cv2.COLOR_BGR2GRAY)
-
-    # Detect faces in the image
-    faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.3, minNeighbors=5)
-
-    # Clear the list of detected faces before adding new ones
-    detected_faces.clear()
-
-    # Add detected faces to the list
-    for face in faces:
-        detected_faces.append(face)
-
-
-# Function to control the drone based on detected faces
-def control_drone():
-    global detected_faces
-
-    # Your logic for drone control based on detected faces goes here
-    # For example, calculate the distance and angle from the drone to the detected face
-    # Adjust the drone's position or velocity accordingly
-    pass
-
+# Get Started
+print("Get Started: Ensure the drone is powered on and ready to perform the rescue mission.")
 
 # Takeoff
 HAL.takeoff(3)
 
+# Face Cascade Classifier
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
 # Main loop
-while not ((VICTIMS_X - 1 <= x_pos <= VICTIMS_X + 1) and
-            (VICTIMS_Y - 1 <= y_pos <= VICTIMS_Y + 1)):
+while not((VICTIMS_X - 1 <= x_pos <= VICTIMS_X + 1) and
+          (VICTIMS_Y - 1 <= y_pos <= VICTIMS_Y + 1)):
 
     # Display images
     frontal_image = HAL.get_frontal_image()
@@ -69,22 +42,37 @@ while not ((VICTIMS_X - 1 <= x_pos <= VICTIMS_X + 1) and
     x_pos, y_pos = HAL.get_position()[:2]
 
     # Set command position
-    HAL.set_cmd_pos(VICTIMS_X, VICTIMS_Y, 3, ANGLE)
+    HAL.set_cmd_pos(VICTIMS_X, VICTIMS_Y, 3, angle)
 
     # Face detection in the frontal image
-    detect_faces()
+    faces = face_cascade.detectMultiScale(cv2.cvtColor(frontal_image, cv2.COLOR_BGR2GRAY), scaleFactor=1.3, minNeighbors=5)
 
-    # Process detected faces and control the drone
-    if len(detected_faces) == FACES_TO_DETECT:
-        control_drone()
+    # Process detected faces
+    for (fx, fy, fw, fh) in faces:
+        # Calculate the distance and angle from the drone to the detected face
+        distance = math.sqrt((fx - x_pos) ** 2 + (fy - y_pos) ** 2)
+        angle_to_face = math.atan2(fy - y_pos, fx - x_pos)
 
-    # Sleep for a short duration
-    rospy.sleep(0.25)
+        # Adjust the drone's position or velocity based on the distance and angle
+        # (Replace the following line with your actual drone control logic)
+        # Example: Mixed control to move towards the detected face
+        HAL.set_cmd_mix(0.2 * math.cos(angle_to_face), 0.2 * math.sin(angle_to_face), 3, 0)  # Adjust parameters as needed
 
-# Additional code for continuous image display
-while True:
+        # Print drone state information
+        position = HAL.get_position()
+        velocity = HAL.get_velocity()
+        orientation = HAL.get_orientation()
+        landed_state = HAL.get_landed_state()
+
+        print(f"Drone State - Position: {position}, Velocity: {velocity}, Orientation: {orientation}, Landed State: {landed_state}")
+
+        # Mark the face as saved and print coordinates
+        print(f"Successful: Rescued participant at ({fx}, {fy})!")       
+        break  # Exit the loop once a face is detected and processed
+
+    # Additional code for continuous image display
     frontal_image = HAL.get_frontal_image()
     ventral_image = HAL.get_ventral_image()
     GUI.showImage(frontal_image)
     GUI.showLeftImage(ventral_image)
-    rospy.sleep(0.1)  # Adjust sleep duration as needed
+
