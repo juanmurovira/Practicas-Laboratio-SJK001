@@ -1,90 +1,89 @@
-from HAL import HAL
 from GUI import GUI
+from HAL import HAL
 import cv2
-import math
-import rospy
+import random
 
 # Constants
-VICTIMS_X = 30
-VICTIMS_Y = -40
-BOAT_X = 0
-BOAT_Y = 0
-X_VELOCITY = 0.25
-ANGLE = 0.6
-SPIRAL_ITERATIONS = 300
-LANDING_MARGIN = 0.07
-FACES_TO_DETECT = 6  # Add this line
+NUM_VICTIMS = 6
 
 # Variables
-x_pos = 0
-y_pos = 0
-detected_faces = []
-it = 0
+x_vel = 0.25
+angle = 0.6
+confidence_threshold = 10000  # Adjust this threshold based on your scenario
 
-# Create a cascade classifier for face detection
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# Start
+x_pos, y_pos = HAL.get_position()[:2]
 
-
-# Function to detect faces
-def detect_faces():
-    global detected_faces
-    frontal_image = HAL.get_frontal_image()
-    gray_image = cv2.cvtColor(frontal_image, cv2.COLOR_BGR2GRAY)
-
-    # Detect faces in the image
-    faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.3, minNeighbors=5)
-
-    # Clear the list of detected faces before adding new ones
-    detected_faces.clear()
-
-    # Add detected faces to the list
-    for face in faces:
-        detected_faces.append(face)
-
-
-# Function to control the drone based on detected faces
-def control_drone():
-    global detected_faces
-
-    # Your logic for drone control based on detected faces goes here
-    # For example, calculate the distance and angle from the drone to the detected face
-    # Adjust the drone's position or velocity accordingly
-    pass
-
+# Get Started
+print("Get Started: Ensure the drone is powered on and ready to perform the rescue mission.")
 
 # Takeoff
 HAL.takeoff(3)
 
-# Main loop
-while not ((VICTIMS_X - 1 <= x_pos <= VICTIMS_X + 1) and
-            (VICTIMS_Y - 1 <= y_pos <= VICTIMS_Y + 1)):
+# Face Cascade Classifier
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-    # Display images
+# Coordenadas predefinidas para las víctimas
+VICTIMS_XY = [(30, -40), (35, -40), (40, -40), (30, -35), (35, -35), (40, -35)]
+
+# Variables adicionales
+search_radius = 5.0  # Radio de búsqueda alrededor de la primera víctima
+face_detected = False  # Indica si se ha detectado una cara
+
+# Main loop
+victim_count = 0
+detected_victims = set()
+target_x, target_y = 0, 0  # Inicializar las variables de destino
+while victim_count < NUM_VICTIMS:
     frontal_image = HAL.get_frontal_image()
     ventral_image = HAL.get_ventral_image()
     GUI.showImage(frontal_image)
     GUI.showLeftImage(ventral_image)
 
-    # Update drone position
     x_pos, y_pos = HAL.get_position()[:2]
+    print('Current Drone Position: x=%.2f, y=%.2f ' % (x_pos, y_pos), end='')
 
-    # Set command position
-    HAL.set_cmd_pos(VICTIMS_X, VICTIMS_Y, 3, ANGLE)
+    if victim_count == NUM_VICTIMS:
+        break
 
-    # Face detection in the frontal image
-    detect_faces()
+    # Si se ha detectado una cara, buscar alrededor de la primera víctima
+    if face_detected:
+        # Actualizar la posición de destino alrededor de la primera víctima
+        target_x = random.uniform(target_x - search_radius, target_x + search_radius)
+        target_y = random.uniform(target_y - search_radius, target_y + search_radius)
+        HAL.set_cmd_pos(target_x, target_y, 3, angle)
+    else:
+        # Si no se ha detectado una cara, utilizar las coordenadas predefinidas
+        target_x, target_y = VICTIMS_XY[victim_count]
+        HAL.set_cmd_pos(target_x, target_y, 3, angle)
 
-    # Process detected faces and control the drone
-    if len(detected_faces) == FACES_TO_DETECT:
-        control_drone()
+    # Face detection
+    faces_frontal = face_cascade.detectMultiScale(
+        cv2.cvtColor(frontal_image, cv2.COLOR_BGR2GRAY),
+        scaleFactor=1.3,
+        minNeighbors=5,
+        minSize=(30, 30),
+    )
 
-    # Sleep for a short duration
-    rospy.sleep(0.25)
+    # Procesar caras detectadas
+    if faces_frontal:
+        face_detected = True  # Indicar que se ha detectado una cara
+        print(' | Face Detected')
+        for (fx, fy, fw, fh) in faces_frontal:
+            if (fx, fy) not in detected_victims and (fw * fh) > confidence_threshold:
+                print('Successful: Rescued participant at frontal cX: %.2f cy: %.2f' % (fx, fy))
+                detected_victims.add((fx, fy))
+                victim_count += 1
 
+                # Dibujar un recuadro alrededor de la cara en la interfaz gráfica
+                cv2.rectangle(frontal_image, (fx, fy), (fx + fw, fy + fh), (0, 255, 0), 2)
+                GUI.showImage(frontal_image)
+    else:
+        face_detected = False
+        print(' | No Face Detected')
 # Additional code for continuous image display
 while True:
     frontal_image = HAL.get_frontal_image()
     ventral_image = HAL.get_ventral_image()
     GUI.showImage(frontal_image)
     GUI.showLeftImage(ventral_image)
-    rospy.sleep(0.1)  # Adjust sleep duration as needed
