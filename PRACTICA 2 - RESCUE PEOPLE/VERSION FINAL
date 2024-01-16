@@ -1,100 +1,100 @@
 from GUI import GUI
 from HAL import HAL
-import cv2 as cv
+import cv2
 import math
-import random
-import time
 
-face_cascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# Constants
+NUM_VICTIMS = 6
+TAKEOFF_HEIGHT = 3
+ANGLE = 0.6
+CONFIDENCE_THRESHOLD = 10000
+SPIRAL_ANGLE_INC = 0.174533
+DISTANCE_INC = 0.5
 
-num_victims = 6
-saved_victims = 0
-victims_locations = []
+# Functions
+def move_to_target_location(target_x, target_y):
+    while True:
+        x_pos, y_pos = HAL.get_position()[:2]
+        HAL.set_cmd_pos(target_x, target_y, TAKEOFF_HEIGHT, ANGLE)
+        sqr_distance_to_target = (target_x - x_pos) ** 2 + (target_y - y_pos) ** 2
+        if sqr_distance_to_target < 1:
+            break
 
-boat_coordinates = (430492, 4459162)
+def detect_faces(ventral_image):
+    detected_faces = []
+    for im_angle in range(0, 365, 10):
+        (h, w) = ventral_image.shape[:2]
+        center = (w // 2, h // 2)
+        M = cv2.getRotationMatrix2D(center, im_angle, 1.0)
+        im_rot = cv2.warpAffine(ventral_image, M, (w, h))
+        faces = face_cascade.detectMultiScale(
+            cv2.cvtColor(im_rot, cv2.COLOR_BGR2GRAY),
+            scaleFactor=1.1,
+            minNeighbors=4,
+            minSize=(30, 30),
+        )
+        if len(faces) > 0:
+            detected_faces.extend(faces)
+    return detected_faces
+
+# Takeoff
+HAL.takeoff(TAKEOFF_HEIGHT)
+
+# Face Cascade Classifier
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+# Coordinates of the known survivor locations
+safety_boat_coordinates = (430492, 4459162)
 survivor_coordinates = (430532, 4459132)
 
-victims_x = boat_coordinates[1] - survivor_coordinates[1]
-victims_y = boat_coordinates[0] - survivor_coordinates[0]
-boat_x = 0
-boat_y = 0
+# Calculate relative victims positions
+victims_x = survivor_coordinates[1] - safety_boat_coordinates[1]
+victims_y = survivor_coordinates[0] - safety_boat_coordinates[0]
 
-takeoff_height = 3
-angle = 0.6
+# Main loop for moving to the target location
+target_x, target_y = -victims_x, -victims_y
+move_to_target_location(target_x, target_y)
 
-x_pos = HAL.get_position()[0]
-y_pos = HAL.get_position()[1]
+# Main loop for face detection and search
+victim_count = 0
+detected_victims = set()
+face_detected = False
+spiral_angle = 0  
 
-distance = 0
-distance_inc = 0.5
-spiral_angle = 0
-spiral_angle_inc = 0.174533
-search_max_distance = 50
+while victim_count < NUM_VICTIMS:
+    frontal_image = HAL.get_frontal_image()
+    ventral_image = HAL.get_ventral_image()
+    GUI.showImage(frontal_image)
+    GUI.showLeftImage(ventral_image)
 
-distance_thr = 4
+    x_pos, y_pos = HAL.get_position()[:2]
 
-HAL.takeoff(takeoff_height)
+    # Increment spiral angle and update search radius
+    spiral_angle += SPIRAL_ANGLE_INC
 
-start_time = time.time()
+    # Face detection
+    detected_faces = detect_faces(ventral_image)
 
-is_searching, is_in_position = True, False
+    # Process detected faces
+    if detected_faces:
+        if not face_detected:
+            print('Face Detected. Current Drone Position: lat=%.8f, lon=%.8f ' % (x_pos, y_pos))
+            face_detected = True
+        for (fx, fy, fw, fh) in detected_faces:
+            if (fx, fy) not in detected_victims and (fw * fh) > CONFIDENCE_THRESHOLD:
+                print('Successful: Rescued participant at frontal cX: %.2f cy: %.2f' % (fx, fy))
+                detected_victims.add((fx, fy))
+                victim_count += 1
+                cv2.rectangle(frontal_image, (fx, fy), (fx + fw, fy + fh), (0, 255, 0), 2)
+                GUI.showImage(frontal_image)
+    else:
+        face_detected = False
 
-while is_searching:
-    ventral_img, frontal_img = HAL.get_ventral_image(), HAL.get_frontal_image()
-    GUI.showImage(frontal_img)
-    GUI.showLeftImage(ventral_img)
-    x_pos, y_pos = HAL.get_position()[0], HAL.get_position()[1]
-    
-    HAL.set_cmd_pos(victims_x, victims_y, takeoff_height, angle)
-    sqr_distance_to_position = (victims_x - x_pos) ** 2 + (victims_y - y_pos) ** 2
-    is_in_position = sqr_distance_to_position < 1
-    
-    if is_in_position:
-        img_gray = cv.cvtColor(ventral_img, cv.COLOR_BGR2GRAY)
-        for im_angle in range(0, 365, 10):
-            (h, w) = img_gray.shape[:2]
-            center = (w // 2, h // 2)
-            M = cv.getRotationMatrix2D(center, im_angle, 1.0)
-            im_rot = cv.warpAffine(img_gray, M, (w, h))
-            detected_faces = face_cascade.detectMultiScale(im_rot, 1.1, 4)
-            if len(detected_faces) > 0:
-                start_time = time.time()
-                for face in detected_faces:
-                    drone_location = HAL.get_position()
-                    victim_location = (drone_location[0], drone_location[1])
-                    for known_victim in victims_locations:
-                        sqr_distance = (known_victim[0] - victim_location[0]) ** 2 + (known_victim[1] - victim_location[1]) ** 2
-                        if sqr_distance < distance_thr ** 2:
-                            continue
-                    victims_locations.append(victim_location)
-                    elapsed_time = time.time() - start_time
-                    print(f'Saved victim at location {victim_location} after {elapsed_time:.2f} seconds')
-                    print('Saved victims: ', len(victims_locations))
-                    fx, fy, fw, fh = face
-                    ventral_img_copy = ventral_img.copy()
-                    cv.rectangle(ventral_img_copy, (fx, fy), (fx + fw, fy + fh), (0, 255, 0), 2)
-                    GUI.showLeftImage(ventral_img_copy)
-
-        spiral_angle += spiral_angle_inc
-        victims_x = boat_coordinates[1] + distance * math.cos(spiral_angle)
-        victims_y = boat_coordinates[0] + distance * math.sin(spiral_angle)
-        distance += distance_inc
-
-    sqr_distance_to_position = (victims_x - x_pos) ** 2 + (victims_y - y_pos) ** 2
-    is_in_position = sqr_distance_to_position < 1
-    is_searching = len(victims_locations) < num_victims or distance < search_max_distance
-
-boat_x, boat_y = 0, 0
-
-while is_in_position:
-    ventral_img, frontal_img = HAL.get_ventral_image(), HAL.get_frontal_image()
-    GUI.showImage(frontal_img)
-    GUI.showLeftImage(ventral_img)
-    HAL.set_cmd_pos(boat_x, boat_y, takeoff_height, angle)
-    is_in_position = (boat_x - 1 < x_pos) and (x_pos < boat_x + 1) and (boat_y - 1 < y_pos) and (y_pos < boat_y + 1)
-
+# Additional code for continuous image display
 while True:
-    ventral_img, frontal_img = HAL.get_ventral_image(), HAL.get_frontal_image()
-    GUI.showImage(frontal_img)
-    GUI.showLeftImage(ventral_img)
-    HAL.land()
+    x_pos, y_pos = HAL.get_position()[:2]
+    frontal_image = HAL.get_frontal_image()
+    ventral_image = HAL.get_ventral_image()
+    GUI.showImage(frontal_image)
+    GUI.showLeftImage(ventral_image)
+    print('Current Drone Position: lat=%.8f, lon=%.8f ' % (x_pos, y_pos))
