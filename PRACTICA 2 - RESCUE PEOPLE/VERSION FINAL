@@ -11,6 +11,12 @@ CONFIDENCE_THRESHOLD = 10000
 SPIRAL_ANGLE_INC = 0.174533
 DISTANCE_INC = 0.5
 
+# Global variables
+victim_count = 0
+detected_victims = set()
+spiral_angle = 0
+face_detected = False
+
 # Functions
 def move_to_target_location(target_x, target_y):
     while True:
@@ -37,38 +43,39 @@ def detect_faces(ventral_image):
             detected_faces.extend(faces)
     return detected_faces
 
-# Function for circular search
 def circular_search(center_x, center_y, radius):
-    angle = 0
+    global spiral_angle
     while True:
-        # Calculate next position in the circular search
-        next_x = center_x + radius * math.cos(angle)
-        next_y = center_y + radius * math.sin(angle)
-
-        # Move to the next position
+        next_x = center_x + radius * math.cos(spiral_angle)
+        next_y = center_y + radius * math.sin(spiral_angle)
         move_to_target_location(next_x, next_y)
-
-        # Face detection at the new position
         frontal_image = HAL.get_frontal_image()
         ventral_image = HAL.get_ventral_image()
         detected_faces = detect_faces(ventral_image)
-
-        if detected_faces:
-            for (fx, fy, fw, fh) in detected_faces:
-                if (fx, fy) not in detected_victims and (fw * fh) > CONFIDENCE_THRESHOLD:
-                    print('Successful: Rescued participant at frontal cX: %.2f cy: %.2f' % (fx, fy))
-                    detected_victims.add((fx, fy))
-                    victim_count += 1
-                    cv2.rectangle(frontal_image, (fx, fy), (fx + fw, fy + fh), (0, 255, 0), 2)
-                    GUI.showImage(frontal_image)
-                    print('Detected Victims So Far:', detected_victims)
-
-        # Update the angle for the next circular position
-        angle += SPIRAL_ANGLE_INC
-
-        # Check if all victims are rescued
+        process_detected_faces(frontal_image, detected_faces)
+        spiral_angle += SPIRAL_ANGLE_INC
         if victim_count == NUM_VICTIMS:
             break
+
+def process_detected_faces(frontal_image, detected_faces):
+    global face_detected, victim_count
+    if detected_faces:
+        if not face_detected:
+            x_pos, y_pos = HAL.get_position()[:2]
+            print('Face Detected. Current Drone Position: lat=%.8f, lon=%.8f ' % (x_pos, y_pos))
+            face_detected = True
+
+        for (fx, fy, fw, fh) in detected_faces:
+            if (fx, fy) not in detected_victims and (fw * fh) > CONFIDENCE_THRESHOLD:
+                print('Successful: Rescued participant at frontal cX: %.2f cy: %.2f' % (fx, fy))
+                detected_victims.add((fx, fy))
+                victim_count += 1
+                draw_rectangle_around_face(frontal_image, fx, fy, fw, fh)
+                GUI.showImage(frontal_image)
+                print('Detected Victims So Far:', detected_victims)
+
+def draw_rectangle_around_face(image, fx, fy, fw, fh):
+    cv2.rectangle(image, (fx, fy), (fx + fw, fy + fh), (0, 255, 0), 2)
 
 # Takeoff
 HAL.takeoff(TAKEOFF_HEIGHT)
@@ -89,11 +96,6 @@ target_x, target_y = -victims_x, -victims_y
 move_to_target_location(target_x, target_y)
 
 # Main loop for face detection and search
-victim_count = 0
-detected_victims = set()
-face_detected = False
-spiral_angle = 0  # Initialize the spiral_angle
-
 while victim_count < NUM_VICTIMS:
     frontal_image = HAL.get_frontal_image()
     ventral_image = HAL.get_ventral_image()
@@ -109,25 +111,7 @@ while victim_count < NUM_VICTIMS:
     detected_faces = detect_faces(ventral_image)
 
     if detected_faces:
-        if not face_detected:
-            print('Face Detected. Current Drone Position: lat=%.8f, lon=%.8f ' % (x_pos, y_pos))
-            face_detected = True
-    
-        for (fx, fy, fw, fh) in detected_faces:
-            if (fx, fy) not in detected_victims and (fw * fh) > CONFIDENCE_THRESHOLD:
-                print('Successful: Rescued participant at frontal cX: %.2f cy: %.2f' % (fx, fy))
-                detected_victims.add((fx, fy))
-                victim_count += 1
-                cv2.rectangle(frontal_image, (fx, fy), (fx + fw, fy + fh), (0, 255, 0), 2)
-                GUI.showImage(frontal_image)
-                print('Detected Victims So Far:', detected_victims)
-
-                # Start circular search for remaining victims
-                remaining_victims = NUM_VICTIMS - victim_count
-                if remaining_victims > 0:
-                    print(f'Starting circular search for {remaining_victims} remaining victims.')
-                    # Initiate circular search from the current victim's position
-                    circular_search(fx, fy, DISTANCE_INC)
+        circular_search(x_pos, y_pos, DISTANCE_INC)
 
 # Additional code for continuous image display
 while True:
