@@ -97,4 +97,3 @@ while True:
     ventral_image = HAL.get_ventral_image()
     GUI.showImage(frontal_image)
     GUI.showLeftImage(ventral_image)
-    print('Current Drone Position: lat=%.8f, lon=%.8f ' % (x_pos, y_pos))
